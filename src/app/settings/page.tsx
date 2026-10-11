@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Loader2, Check, Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
+import { Loader2, Check, Eye, EyeOff } from "lucide-react";
+import { Header } from "@/components/Header";
 
 export default function SettingsPage() {
   const [name, setName] = useState("");
@@ -12,7 +12,6 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  const [isGoogleUser, setIsGoogleUser] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,9 +28,6 @@ export default function SettingsPage() {
         const data = await res.json();
         setName(data.name || "");
         setEmail(data.email || "");
-        // If user signed in via Google, they won't have a password to change
-        // We detect this by checking if email contains google metadata
-        // Simple heuristic: if they have no email set or signed up via OAuth
       } catch {
         setError("Failed to load profile");
       } finally {
@@ -53,14 +49,12 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email }),
       });
-
       const data = await res.json();
-
       if (data.success) {
         setMessage("Profile updated");
         setTimeout(() => setMessage(""), 3000);
       } else {
-        setError(data.error || "Failed to update profile");
+        setError(data.error || "Failed to update");
         setTimeout(() => setError(""), 3000);
       }
     } catch {
@@ -76,26 +70,22 @@ export default function SettingsPage() {
     setPasswordError("");
 
     if (newPassword.length < 6) {
-      setPasswordError("New password must be at least 6 characters");
+      setPasswordError("Min 6 characters");
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setPasswordError("Passwords don't match");
       return;
     }
 
     setSavingPassword(true);
-
     try {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-
       const data = await res.json();
-
       if (data.success) {
         setPasswordMessage("Password updated");
         setCurrentPassword("");
@@ -103,7 +93,7 @@ export default function SettingsPage() {
         setConfirmPassword("");
         setTimeout(() => setPasswordMessage(""), 3000);
       } else {
-        setPasswordError(data.error || "Failed to update password");
+        setPasswordError(data.error || "Failed to update");
         setTimeout(() => setPasswordError(""), 3000);
       }
     } catch {
@@ -115,181 +105,133 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+      <div className="h-screen flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
-      <div className="max-w-lg mx-auto">
-        {/* Back link */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors mb-8"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to dashboard
-        </Link>
+    <div className="h-screen flex flex-col">
+      <Header />
 
-        <h1 className="text-2xl font-bold tracking-tight mb-1">Settings</h1>
-        <p className="text-sm text-muted mb-8">Manage your account and preferences</p>
+      <main className="flex-1 flex items-center justify-center px-4 overflow-hidden">
+        <div className="w-full max-w-3xl">
+          <h1 className="text-xl font-bold tracking-tight mb-6">Settings</h1>
 
-        {/* Profile section */}
-        <form onSubmit={handleSaveProfile} className="mb-8">
-          <h2 className="text-[13px] font-semibold text-foreground uppercase tracking-wider mb-4">
-            Profile
-          </h2>
-          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4">
-            <div>
-              <label className="text-[13px] text-muted font-medium mb-1.5 block">Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full h-11 px-4 bg-background border border-border rounded-xl text-sm font-medium placeholder:text-muted/50 transition-all"
-              />
-            </div>
-            <div>
-              <label className="text-[13px] text-muted font-medium mb-1.5 block">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-11 px-4 bg-background border border-border rounded-xl text-sm font-medium placeholder:text-muted/50 transition-all"
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-destructive font-medium animate-fade-in">{error}</p>
-            )}
-            {message && (
-              <p className="text-sm text-success font-medium flex items-center gap-1.5 animate-fade-in">
-                <Check className="w-3.5 h-3.5" />
-                {message}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="h-10 px-5 bg-accent text-accent-foreground rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save changes"}
-            </button>
-          </div>
-        </form>
-
-        {/* Password section */}
-        <form onSubmit={handleChangePassword} className="mb-8">
-          <h2 className="text-[13px] font-semibold text-foreground uppercase tracking-wider mb-4">
-            Change Password
-          </h2>
-          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4">
-            <div className="relative">
-              <label className="text-[13px] text-muted font-medium mb-1.5 block">
-                Current password
-              </label>
-              <input
-                type={showCurrentPassword ? "text" : "password"}
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
-                className="w-full h-11 px-4 pr-11 bg-background border border-border rounded-xl text-sm font-medium placeholder:text-muted/50 transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3.5 bottom-3 text-muted hover:text-foreground transition-colors"
-              >
-                {showCurrentPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Profile */}
+            <form onSubmit={handleSaveProfile} className="bg-surface border border-border rounded-2xl p-5">
+              <h2 className="text-[13px] font-semibold uppercase tracking-wider mb-4">Profile</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[12px] text-muted font-medium mb-1 block">Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] text-muted font-medium mb-1 block">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm transition-all"
+                  />
+                </div>
+                {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+                {message && (
+                  <p className="text-xs text-success font-medium flex items-center gap-1">
+                    <Check className="w-3 h-3" /> {message}
+                  </p>
                 )}
-              </button>
-            </div>
-            <div className="relative">
-              <label className="text-[13px] text-muted font-medium mb-1.5 block">
-                New password
-              </label>
-              <input
-                type={showNewPassword ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="At least 6 characters"
-                minLength={6}
-                className="w-full h-11 px-4 pr-11 bg-background border border-border rounded-xl text-sm font-medium placeholder:text-muted/50 transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3.5 bottom-3 text-muted hover:text-foreground transition-colors"
-              >
-                {showNewPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="h-9 px-4 bg-accent text-accent-foreground rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+                </button>
+              </div>
+            </form>
+
+            {/* Password */}
+            <form onSubmit={handleChangePassword} className="bg-surface border border-border rounded-2xl p-5">
+              <h2 className="text-[13px] font-semibold uppercase tracking-wider mb-4">Password</h2>
+              <div className="space-y-3">
+                <div className="relative">
+                  <label className="text-[12px] text-muted font-medium mb-1 block">Current</label>
+                  <input
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Current password"
+                    className="w-full h-10 px-3 pr-10 bg-background border border-border rounded-xl text-sm transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 bottom-2.5 text-muted hover:text-foreground"
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <div className="relative">
+                  <label className="text-[12px] text-muted font-medium mb-1 block">New</label>
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password"
+                    minLength={6}
+                    className="w-full h-10 px-3 pr-10 bg-background border border-border rounded-xl text-sm transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 bottom-2.5 text-muted hover:text-foreground"
+                  >
+                    {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <div>
+                  <label className="text-[12px] text-muted font-medium mb-1 block">Confirm</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm transition-all"
+                  />
+                </div>
+                {passwordError && <p className="text-xs text-destructive font-medium">{passwordError}</p>}
+                {passwordMessage && (
+                  <p className="text-xs text-success font-medium flex items-center gap-1">
+                    <Check className="w-3 h-3" /> {passwordMessage}
+                  </p>
                 )}
-              </button>
-            </div>
-            <div>
-              <label className="text-[13px] text-muted font-medium mb-1.5 block">
-                Confirm new password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
-                className="w-full h-11 px-4 bg-background border border-border rounded-xl text-sm font-medium placeholder:text-muted/50 transition-all"
-              />
-            </div>
-
-            {passwordError && (
-              <p className="text-sm text-destructive font-medium animate-fade-in">
-                {passwordError}
-              </p>
-            )}
-            {passwordMessage && (
-              <p className="text-sm text-success font-medium flex items-center gap-1.5 animate-fade-in">
-                <Check className="w-3.5 h-3.5" />
-                {passwordMessage}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
-              className="h-10 px-5 bg-accent text-accent-foreground rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {savingPassword ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Update password"
-              )}
-            </button>
+                <button
+                  type="submit"
+                  disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+                  className="h-9 px-4 bg-accent text-accent-foreground rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {savingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Update"}
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-
-        {/* Bot settings link */}
-        <div>
-          <h2 className="text-[13px] font-semibold text-foreground uppercase tracking-wider mb-4">
-            Telegram Bot
-          </h2>
-          <Link
-            href="/setup"
-            className="flex items-center justify-between bg-surface border border-border rounded-2xl p-5 hover:border-accent/20 transition-colors"
-          >
-            <div>
-              <p className="text-sm font-semibold">Bot settings</p>
-              <p className="text-[13px] text-muted">Change or reconnect your Telegram bot</p>
-            </div>
-            <ArrowLeft className="w-4 h-4 text-muted rotate-180" />
-          </Link>
         </div>
-      </div>
+      </main>
+
+      <footer className="py-3 text-center border-t border-border">
+        <p className="text-[11px] text-muted/40 font-medium tracking-wide">QUICKDROP</p>
+      </footer>
     </div>
   );
 }

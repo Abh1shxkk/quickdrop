@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Public routes
-  const publicRoutes = ["/login", "/signup", "/auth/callback"];
+  const publicRoutes = ["/login", "/signup", "/auth/callback", "/welcome"];
   const isPublic = publicRoutes.some((route) => path.startsWith(route));
 
   // Not logged in and trying to access protected route
