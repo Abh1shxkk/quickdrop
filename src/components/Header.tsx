@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { Zap, LogOut, Settings, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export function Header() {
   const [userName, setUserName] = useState("");
@@ -39,7 +40,7 @@ export function Header() {
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
     router.refresh();
   };
 
@@ -55,12 +56,12 @@ export function Header() {
   return (
     <header className="border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-2xl mx-auto px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
             <Zap className="w-4 h-4 text-accent-foreground" strokeWidth={2.5} />
           </div>
           <span className="text-[15px] font-semibold tracking-tight">QuickDrop</span>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-3">
           {/* Connection status */}
