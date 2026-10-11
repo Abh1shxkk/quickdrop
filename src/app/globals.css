@@ -1,15 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #1a1a1a;
-  --muted: #737373;
-  --border: #e5e5e5;
-  --surface: #ffffff;
-  --accent: #0a0a0a;
-  --accent-foreground: #ffffff;
-  --success: #22c55e;
-  --destructive: #ef4444;
+  --background: #FAF7F2;
+  --foreground: #2C2318;
+  --muted: #9C8B7A;
+  --border: #E8DFD4;
+  --surface: #FFFFFF;
+  --accent: #8B5E3C;
+  --accent-foreground: #FFFFFF;
+  --success: #5E8C61;
+  --destructive: #C45D4C;
+}
+
+[data-theme="dark"] {
+  --background: #1A1612;
+  --foreground: #EDE6DD;
+  --muted: #8A7D70;
+  --border: #2E2822;
+  --surface: #231E19;
+  --accent: #C4875A;
+  --accent-foreground: #1A1612;
+  --success: #7DAF80;
+  --destructive: #D4756A;
 }
 
 @theme inline {
@@ -22,8 +34,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
   --color-destructive: var(--destructive);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-dm-sans);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
 body {
@@ -32,6 +44,7 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s, color 0.3s;
 }
 
 * { border-color: var(--border); }
@@ -44,7 +57,12 @@ body {
 input:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 textarea { resize: none; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
