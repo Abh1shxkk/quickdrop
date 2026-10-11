@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { X, Loader2, Eye, EyeOff } from "lucide-react";
 
@@ -14,6 +14,16 @@ export function AuthModal({ open, onClose }: Props) {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    modalRef.current?.querySelector("input")?.focus();
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -40,7 +50,7 @@ export function AuthModal({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-surface border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl">
+      <div ref={modalRef} className="relative bg-surface border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl" role="dialog" aria-modal="true" aria-label={mode === "login" ? "Sign in" : "Create account"}>
         <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-colors">
           <X className="w-4 h-4" />
         </button>
