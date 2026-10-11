@@ -27,8 +27,9 @@ export function Header({ connected, onDisconnect }: Props) {
 
   return (
     <>
-      <header className="border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div className="sticky top-0 z-40 px-4 pt-3">
+      <header className="border border-border bg-surface/80 backdrop-blur-md rounded-2xl max-w-2xl mx-auto shadow-sm">
+        <div className="px-5 h-13 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
               <Zap className="w-4 h-4 text-accent-foreground" strokeWidth={2.5} />
@@ -91,6 +92,7 @@ export function Header({ connected, onDisconnect }: Props) {
           </div>
         </div>
       </header>
+      </div>
 
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
     </>
