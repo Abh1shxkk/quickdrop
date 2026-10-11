@@ -1,515 +1,436 @@
 "use client";
 
-import Link from "next/link";
-import { useRef, useEffect, useState } from "react";
-import { motion, useInView, useMotionValue, useSpring } from "framer-motion";
-import { ArrowRight, Zap, Send, Shield, Clock, Mail, Code, ChevronRight, FileText, Image, Film } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Zap, Send, Paperclip, X, RefreshCw, Check, Loader2, AlertCircle,
+  Settings2, User, UsersRound, FileText, Image as ImageIcon, Film, Music,
+  Eye, EyeOff, ChevronDown,
+} from "lucide-react";
 
-// --- Custom SVG Icons ---
-function GithubIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-    </svg>
-  );
-}
+type Contact = { id: number; name: string; type: string };
+type Status = "idle" | "sending" | "sent" | "error";
 
-function LinkedinIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-    </svg>
-  );
-}
+const FILE_ICONS: Record<string, typeof FileText> = { image: ImageIcon, video: Film, audio: Music };
+function getFileIcon(type: string) { return FILE_ICONS[type.split("/")[0]] || FileText; }
+function formatSize(b: number) { return b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`; }
 
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
+export default function Home() {
+  // Token state
+  const [token, setToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const [tokenVerifying, setTokenVerifying] = useState(false);
+  const [tokenError, setTokenError] = useState("");
 
-// --- Animated Counter ---
-function AnimatedNumber({ value, suffix = "", prefix = "" }: { value: number; suffix?: string; prefix?: string }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true });
-  const motionVal = useMotionValue(0);
-  const spring = useSpring(motionVal, { duration: 2000 });
-  const [display, setDisplay] = useState(0);
+  // Contacts
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selected, setSelected] = useState<Contact | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [showContacts, setShowContacts] = useState(false);
+  const [manualId, setManualId] = useState("");
 
+  // Message
+  const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [caption, setCaption] = useState("");
+  const [status, setStatus] = useState<Status>("idle");
+  const [error, setError] = useState("");
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Load token from localStorage
   useEffect(() => {
-    if (isInView) motionVal.set(value);
-  }, [isInView, motionVal, value]);
+    const saved = localStorage.getItem("qd_token");
+    if (saved) {
+      setToken(saved);
+      setTokenInput(saved);
+    } else {
+      setShowSetup(true);
+    }
+  }, []);
 
+  // Fetch contacts when token is set
   useEffect(() => {
-    const unsubscribe = spring.on("change", (v: number) => setDisplay(Math.round(v)));
-    return unsubscribe;
-  }, [spring]);
+    if (token) fetchContacts();
+  }, [token]);
 
-  return <span ref={ref}>{prefix}{display}{suffix}</span>;
-}
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowContacts(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-// --- Spotlight Mouse Follow ---
-function Spotlight() {
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [visible, setVisible] = useState(false);
+  const fetchContacts = async () => {
+    if (!token) return;
+    setContactsLoading(true);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ botToken: token }),
+      });
+      const data = await res.json();
+      if (data.contacts) setContacts(data.contacts);
+    } catch { /* ignore */ }
+    finally { setContactsLoading(false); }
+  };
 
-  return (
-    <div
-      className="absolute inset-0 overflow-hidden"
-      onMouseMove={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        setPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-        setVisible(true);
-      }}
-      onMouseLeave={() => setVisible(false)}
-    >
-      <div
-        className="pointer-events-none absolute w-[600px] h-[600px] rounded-full transition-opacity duration-500"
-        style={{
-          left: pos.x - 300,
-          top: pos.y - 300,
-          background: "radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%)",
-          opacity: visible ? 1 : 0,
-        }}
-      />
-    </div>
-  );
-}
+  const connectToken = async () => {
+    if (!tokenInput.trim()) return;
+    setTokenVerifying(true);
+    setTokenError("");
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${tokenInput.trim()}/getMe`);
+      const data = await res.json();
+      if (data.ok) {
+        setToken(tokenInput.trim());
+        localStorage.setItem("qd_token", tokenInput.trim());
+        setShowSetup(false);
+      } else {
+        setTokenError("Invalid token");
+      }
+    } catch {
+      setTokenError("Connection failed");
+    } finally {
+      setTokenVerifying(false);
+    }
+  };
 
-// --- Section Reveal ---
-function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-80px" });
+  const disconnect = () => {
+    setToken("");
+    setTokenInput("");
+    setContacts([]);
+    setSelected(null);
+    localStorage.removeItem("qd_token");
+    setShowSetup(true);
+  };
 
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 32 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.7, ease: [0.25, 0.1, 0, 1], delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
+  const handleSend = async () => {
+    const target = selected || (manualId.trim() ? { id: Number(manualId.trim()), name: manualId.trim(), type: "private" } : null);
+    if (!target || !token) return;
+    if (!text.trim() && !file) return;
 
-// --- Feature Card ---
-function FeatureCard({ icon: Icon, title, description, delay = 0 }: { icon: typeof Send; title: string; description: string; delay?: number }) {
-  return (
-    <Reveal delay={delay}>
-      <div className="group relative bg-white/[0.02] border border-white/[0.05] rounded-2xl p-7 hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-500 cursor-default">
-        <div className="w-11 h-11 rounded-xl bg-white/[0.05] flex items-center justify-center mb-5 group-hover:bg-white/[0.08] group-hover:scale-110 transition-all duration-500">
-          <Icon className="w-5 h-5 text-white/60 group-hover:text-white/90 transition-colors duration-500" />
+    setStatus("sending");
+    setError("");
+
+    try {
+      const form = new FormData();
+      form.append("botToken", token);
+      form.append("chatId", String(target.id));
+      if (file) {
+        form.append("file", file);
+        if (caption.trim()) form.append("caption", caption.trim());
+      } else {
+        form.append("text", text.trim());
+      }
+
+      const res = await fetch("/api/send", { method: "POST", body: form });
+      const data = await res.json();
+
+      if (data.success) {
+        setStatus("sent");
+        setText("");
+        setFile(null);
+        setCaption("");
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        setTimeout(() => setStatus("idle"), 2000);
+      } else {
+        setStatus("error");
+        setError(data.error || "Failed");
+        setTimeout(() => setStatus("idle"), 3000);
+      }
+    } catch {
+      setStatus("error");
+      setError("Network error");
+      setTimeout(() => setStatus("idle"), 3000);
+    }
+  };
+
+  const handleTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; }
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const hasTarget = selected || manualId.trim();
+  const canSend = token && hasTarget && (text.trim() || file) && status === "idle";
+  const FileIcon = file ? getFileIcon(file.type) : FileText;
+
+  // --- SETUP SCREEN ---
+  if (showSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="w-9 h-9 bg-accent rounded-xl flex items-center justify-center">
+              <Zap className="w-4.5 h-4.5 text-accent-foreground" strokeWidth={2.5} />
+            </div>
+            <span className="text-lg font-bold tracking-tight">QuickDrop</span>
+          </div>
+
+          <h1 className="text-xl font-bold tracking-tight mb-1">Paste your bot token</h1>
+          <p className="text-sm text-muted mb-6">
+            Create a bot via{" "}
+            <span className="font-mono text-foreground text-xs bg-border/50 px-1.5 py-0.5 rounded">@BotFather</span>
+            {" "}on Telegram, then paste the token here.
+          </p>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <input
+                type={showToken ? "text" : "password"}
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && connectToken()}
+                placeholder="123456:ABC-DEF..."
+                className="w-full h-12 px-4 pr-11 bg-surface border border-border rounded-xl text-sm font-mono placeholder:text-muted/40 transition-all"
+              />
+              <button onClick={() => setShowToken(!showToken)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors">
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {tokenError && <p className="text-sm text-destructive font-medium">{tokenError}</p>}
+
+            <button
+              onClick={connectToken}
+              disabled={!tokenInput.trim() || tokenVerifying}
+              className="w-full h-12 bg-accent text-accent-foreground rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              {tokenVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
+            </button>
+          </div>
+
+          <p className="text-[11px] text-muted/50 mt-4 leading-relaxed">
+            Token is saved in your browser only. Never sent to our servers for storage.
+          </p>
         </div>
-        <h3 className="font-display text-[16px] font-semibold text-white/90 mb-2 tracking-tight">{title}</h3>
-        <p className="text-[14px] text-white/35 leading-relaxed">{description}</p>
       </div>
-    </Reveal>
-  );
-}
+    );
+  }
 
-// --- Typing text ---
-function TypingText({ texts }: { texts: string[] }) {
-  const [index, setIndex] = useState(0);
-  const [displayed, setDisplayed] = useState("");
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    const current = texts[index];
-    const speed = deleting ? 40 : 80;
-
-    if (!deleting && displayed === current) {
-      const timeout = setTimeout(() => setDeleting(true), 2000);
-      return () => clearTimeout(timeout);
-    }
-    if (deleting && displayed === "") {
-      setDeleting(false);
-      setIndex((i) => (i + 1) % texts.length);
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setDisplayed(deleting ? current.slice(0, displayed.length - 1) : current.slice(0, displayed.length + 1));
-    }, speed);
-    return () => clearTimeout(timeout);
-  }, [displayed, deleting, index, texts]);
-
+  // --- MAIN APP ---
   return (
-    <span className="text-white">
-      {displayed}
-      <span className="inline-block w-[2px] h-[1em] bg-white/60 ml-0.5 align-middle animate-pulse" />
-    </span>
-  );
-}
-
-export default function LandingPage() {
-  return (
-    <div className="bg-[#060606] text-white selection:bg-white/20 overflow-hidden">
-      {/* --- NAV --- */}
-      <motion.nav
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.1 }}
-        className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.04] bg-[#060606]/80 backdrop-blur-xl"
-      >
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-[#060606]" strokeWidth={2.5} />
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
+              <Zap className="w-4 h-4 text-accent-foreground" strokeWidth={2.5} />
             </div>
-            <span className="font-display text-[15px] font-bold tracking-tight">QuickDrop</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Link href="/login" className="text-[13px] text-white/40 hover:text-white transition-colors font-medium px-4 py-2 rounded-lg hover:bg-white/[0.04]">
-              Log in
-            </Link>
-            <Link href="/signup" className="text-[13px] bg-white text-[#060606] font-semibold px-5 py-2 rounded-lg hover:bg-white/90 transition-all active:scale-[0.97]">
-              Sign up free
-            </Link>
+            <span className="text-[15px] font-semibold tracking-tight">QuickDrop</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-success" />
+              <span className="text-xs text-muted font-medium">Connected</span>
+            </div>
+            <button onClick={disconnect} className="p-1.5 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground" title="Disconnect">
+              <Settings2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
-      </motion.nav>
+      </header>
 
-      {/* --- HERO --- */}
-      <section className="relative pt-40 pb-32 px-6">
-        <Spotlight />
-
-        {/* Background grid */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
-          backgroundSize: "80px 80px",
-          maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 30%, transparent 100%)",
-        }} />
-
-        {/* Glow orb */}
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full bg-white/[0.015] blur-[120px] pointer-events-none" />
-
-        <div className="relative z-10 max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <div className="inline-flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-full px-4 py-2 mb-10 hover:bg-white/[0.06] transition-colors cursor-default">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[12px] text-white/50 font-medium tracking-wide">100% free and open source</span>
-              <ChevronRight className="w-3 h-3 text-white/20" />
-            </div>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4, ease: [0.25, 0.1, 0, 1] }}
-            className="font-display text-[clamp(40px,7vw,80px)] font-bold tracking-[-0.03em] leading-[1.05] mb-7"
-          >
-            <span className="text-white">Send anything</span>
-            <br />
-            <span className="text-transparent bg-clip-text" style={{
-              backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.9), rgba(255,255,255,0.3))",
-            }}>
-              from your browser
-            </span>
-          </motion.h1>
-
-          {/* Subtext with typing */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.6 }}
-            className="text-[18px] text-white/30 max-w-lg mx-auto mb-12 leading-relaxed font-light"
-          >
-            Drop{" "}
-            <TypingText texts={["meeting notes", "screenshots", "project files", "quick links", "code snippets"]} />
-            {" "}&mdash; delivered to Telegram in one click. No apps. No cables. No forwarding.
-          </motion.p>
-
-          {/* CTA buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.8 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3"
-          >
-            <Link
-              href="/signup"
-              className="group inline-flex items-center gap-2.5 bg-white text-[#060606] font-semibold px-8 py-3.5 rounded-xl text-[14px] hover:shadow-[0_0_30px_rgba(255,255,255,0.1)] transition-all duration-300 active:scale-[0.97]"
-            >
-              Get started &mdash; it&apos;s free
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </Link>
-            <a
-              href="https://github.com/Abh1shxkk/quickdrop"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium px-8 py-3.5 rounded-xl text-[14px] hover:bg-white/[0.07] hover:text-white/80 hover:border-white/[0.1] transition-all duration-300"
-            >
-              <GithubIcon className="w-4 h-4" />
-              Star on GitHub
-            </a>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* --- PRODUCT PREVIEW --- */}
-      <section className="relative px-6 pb-32">
-        <Reveal>
-          <div className="max-w-3xl mx-auto">
-            <div className="relative rounded-2xl border border-white/[0.06] bg-white/[0.02] p-1.5 shadow-2xl shadow-black/50">
-              <div className="relative bg-[#0c0c0c] rounded-xl overflow-hidden">
-                {/* Browser chrome */}
-                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/[0.04]">
-                  <div className="flex gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-white/[0.06]" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-white/[0.06]" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-white/[0.06]" />
-                  </div>
-                  <div className="flex-1 h-7 bg-white/[0.03] rounded-lg ml-3 flex items-center px-3">
-                    <div className="w-3 h-3 rounded-full border border-white/10 mr-2" />
-                    <span className="text-[11px] text-white/15 font-mono">quickdrop.vercel.app/dashboard</span>
-                  </div>
-                </div>
-
-                {/* App UI mockup */}
-                <div className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-white rounded-md flex items-center justify-center">
-                        <Zap className="w-3.5 h-3.5 text-[#0c0c0c]" strokeWidth={2.5} />
-                      </div>
-                      <div className="h-2.5 w-16 bg-white/10 rounded-full" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      <div className="h-2 w-14 bg-white/8 rounded-full" />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3.5 bg-white/[0.03] rounded-xl border border-white/[0.05]">
-                    <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center">
-                      <span className="text-[11px] font-bold text-white/40">AC</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="h-2.5 w-28 bg-white/15 rounded-full" />
-                      <div className="h-2 w-16 bg-white/8 rounded-full mt-1.5" />
-                    </div>
-                    <div className="w-2 h-2 rounded-full bg-emerald-400/60" />
-                  </div>
-
-                  <div className="p-4 bg-white/[0.02] rounded-xl border border-white/[0.04] space-y-3">
-                    <div className="flex items-center gap-2 text-white/20">
-                      <FileText className="w-3.5 h-3.5" />
-                      <span className="text-[11px]">project-brief.pdf</span>
-                      <span className="text-[10px] text-white/10 ml-auto">2.4 MB</span>
-                    </div>
-                    <div className="h-px bg-white/[0.04]" />
-                    <div className="flex items-center gap-2 text-white/20">
-                      <Image className="w-3.5 h-3.5" />
-                      <span className="text-[11px]">screenshot-2024.png</span>
-                      <span className="text-[10px] text-white/10 ml-auto">840 KB</span>
-                    </div>
-                    <div className="h-px bg-white/[0.04]" />
-                    <div className="space-y-1.5 pt-1">
-                      <div className="h-2 w-full bg-white/6 rounded-full" />
-                      <div className="h-2 w-2/3 bg-white/6 rounded-full" />
-                    </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="flex gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-white/[0.04] flex items-center justify-center">
-                          <Film className="w-3 h-3 text-white/20" />
-                        </div>
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        className="h-8 px-5 bg-white rounded-lg flex items-center justify-center gap-1.5 cursor-default"
-                      >
-                        <Send className="w-3 h-3 text-[#0c0c0c]" />
-                        <span className="text-[11px] text-[#0c0c0c] font-semibold">Send</span>
-                      </motion.div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* Main */}
+      <main className="flex-1 flex items-start justify-center pt-10 pb-20 px-4">
+        <div className="w-full max-w-lg space-y-5">
+          {/* Title */}
+          <div className="text-center mb-6">
+            <h1 className="text-xl font-bold tracking-tight mb-1">Send anything, instantly</h1>
+            <p className="text-sm text-muted">Pick a contact and drop your message or file.</p>
           </div>
-        </Reveal>
-      </section>
 
-      {/* --- STATS --- */}
-      <section className="relative px-6 pb-32">
-        <Reveal>
-          <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-3 divide-x divide-white/[0.04]">
-              {[
-                { value: 0, suffix: "", label: "Cost to use", prefix: "$" },
-                { value: 2, suffix: " min", label: "Setup time" },
-                { value: 100, suffix: "%", label: "Open source" },
-              ].map((stat) => (
-                <div key={stat.label} className="text-center px-6 py-4">
-                  <p className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white/90 mb-2">
-                    <AnimatedNumber value={stat.value} suffix={stat.suffix} prefix={stat.prefix || ""} />
-                  </p>
-                  <p className="text-[13px] text-white/25 font-medium">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* --- FEATURES --- */}
-      <section className="relative px-6 pb-32">
-        <Spotlight />
-        <div className="relative z-10 max-w-5xl mx-auto">
-          <Reveal>
-            <div className="text-center mb-16">
-              <p className="text-[12px] text-white/25 font-semibold uppercase tracking-[0.2em] mb-4">Features</p>
-              <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-                Simple by design.
-                <br />
-                <span className="text-white/30">Powerful by default.</span>
-              </h2>
-            </div>
-          </Reveal>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <FeatureCard icon={Zap} title="Instant delivery" description="Messages hit Telegram the moment you press send. Zero latency, zero queues, zero waiting." delay={0} />
-            <FeatureCard icon={Shield} title="End-to-end encrypted" description="Your bot token is encrypted with AES-256-GCM before storage. Not even we can read it." delay={0.1} />
-            <FeatureCard icon={Send} title="Any file type" description="Images, PDFs, videos, audio, code — if Telegram supports it, QuickDrop sends it." delay={0.2} />
-            <FeatureCard icon={Clock} title="2-minute setup" description="Create a bot on Telegram. Paste the token. That's the entire setup. No config files." delay={0.1} />
-            <FeatureCard icon={Code} title="Fully open source" description="Every line on GitHub. Fork it, self-host it, audit it. No black boxes." delay={0.2} />
-            <FeatureCard icon={Mail} title="Multi-user isolation" description="Each user brings their own bot. Your data never touches anyone else's." delay={0.3} />
-          </div>
-        </div>
-      </section>
-
-      {/* --- HOW IT WORKS --- */}
-      <section className="relative px-6 pb-32">
-        <div className="max-w-3xl mx-auto">
-          <Reveal>
-            <div className="text-center mb-16">
-              <p className="text-[12px] text-white/25 font-semibold uppercase tracking-[0.2em] mb-4">How it works</p>
-              <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight">
-                Three steps. Done.
-              </h2>
-            </div>
-          </Reveal>
-
-          <div className="space-y-6">
-            {[
-              { step: "01", title: "Create a Telegram bot", desc: "Open Telegram, message @BotFather, type /newbot. Takes 30 seconds." },
-              { step: "02", title: "Paste your token", desc: "Copy the API token BotFather gives you. Paste it into QuickDrop. We encrypt it instantly." },
-              { step: "03", title: "Start sending", desc: "Type text, drag files, hit send. It arrives on Telegram before you can switch apps." },
-            ].map((item, i) => (
-              <Reveal key={item.step} delay={i * 0.15}>
-                <div className="group flex items-start gap-6 p-6 rounded-2xl border border-white/[0.04] hover:border-white/[0.08] hover:bg-white/[0.02] transition-all duration-500">
-                  <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0 group-hover:bg-white/[0.07] transition-colors duration-500">
-                    <span className="font-display text-[14px] font-bold text-white/30 group-hover:text-white/60 transition-colors">{item.step}</span>
-                  </div>
-                  <div>
-                    <h3 className="font-display text-[17px] font-semibold text-white/80 mb-1 tracking-tight">{item.title}</h3>
-                    <p className="text-[14px] text-white/30 leading-relaxed">{item.desc}</p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* --- CTA --- */}
-      <section className="relative px-6 pb-32">
-        <Reveal>
-          <div className="max-w-3xl mx-auto relative">
-            <div className="absolute inset-0 bg-white/[0.01] blur-3xl rounded-full scale-110" />
-            <div className="relative bg-white/[0.02] border border-white/[0.05] rounded-3xl p-16 text-center overflow-hidden">
-              <div className="absolute inset-0 pointer-events-none opacity-30" style={{
-                backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0)",
-                backgroundSize: "32px 32px",
-              }} />
-              <div className="relative z-10">
-                <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4 leading-tight">
-                  Stop emailing
-                  <br />
-                  yourself.
-                </h2>
-                <p className="text-[15px] text-white/30 mb-10 max-w-md mx-auto leading-relaxed">
-                  QuickDrop is free, open source, and takes less time to set up than reading this sentence twice.
-                </p>
-                <Link
-                  href="/signup"
-                  className="group inline-flex items-center gap-2.5 bg-white text-[#060606] font-semibold px-10 py-4 rounded-xl text-[15px] hover:shadow-[0_0_40px_rgba(255,255,255,0.12)] transition-all duration-300 active:scale-[0.97]"
+          {/* Contact picker */}
+          <div>
+            <label className="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2 block">Send to</label>
+            <div className="flex gap-2">
+              {/* Dropdown */}
+              <div className="relative flex-1" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowContacts(!showContacts)}
+                  className="w-full h-11 px-4 bg-surface border border-border rounded-xl text-sm font-medium flex items-center justify-between hover:border-accent/20 transition-all"
                 >
-                  Start sending now
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </Link>
+                  {selected ? (
+                    <span className="flex items-center gap-2 truncate">
+                      {selected.type === "group" || selected.type === "supergroup"
+                        ? <UsersRound className="w-3.5 h-3.5 text-muted shrink-0" />
+                        : <User className="w-3.5 h-3.5 text-muted shrink-0" />}
+                      {selected.name}
+                    </span>
+                  ) : (
+                    <span className="text-muted/50">Select contact...</span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted transition-transform ${showContacts ? "rotate-180" : ""}`} />
+                </button>
+
+                {showContacts && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-xl shadow-lg overflow-hidden z-40">
+                    {/* Manual ID input */}
+                    <div className="p-2 border-b border-border">
+                      <input
+                        type="text"
+                        value={manualId}
+                        onChange={(e) => { setManualId(e.target.value); setSelected(null); }}
+                        placeholder="Or type a Chat ID..."
+                        className="w-full h-9 px-3 bg-background border border-border rounded-lg text-sm font-mono placeholder:text-muted/40"
+                      />
+                    </div>
+
+                    {contacts.length === 0 ? (
+                      <div className="p-4 text-center">
+                        <p className="text-xs text-muted mb-1">No contacts yet</p>
+                        <p className="text-[11px] text-muted/50">
+                          Send <span className="font-mono bg-border/50 px-1 py-0.5 rounded text-foreground">/start</span> to your bot first
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="max-h-[180px] overflow-y-auto">
+                        {contacts.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => { setSelected(c); setManualId(""); setShowContacts(false); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-background transition-colors ${selected?.id === c.id ? "bg-background font-medium" : ""}`}
+                          >
+                            {c.type === "group" || c.type === "supergroup"
+                              ? <UsersRound className="w-3.5 h-3.5 text-muted shrink-0" />
+                              : <User className="w-3.5 h-3.5 text-muted shrink-0" />}
+                            <span className="truncate">{c.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="p-2 border-t border-border">
+                      <button onClick={fetchContacts} disabled={contactsLoading} className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-muted hover:text-foreground transition-colors">
+                        <RefreshCw className={`w-3 h-3 ${contactsLoading ? "animate-spin" : ""}`} />
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </Reveal>
-      </section>
 
-      {/* --- FOOTER --- */}
-      <footer className="border-t border-white/[0.04] py-16 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-10">
-            <div className="text-center lg:text-left">
-              <div className="flex items-center gap-2.5 justify-center lg:justify-start mb-4">
-                <div className="w-7 h-7 bg-white rounded-md flex items-center justify-center">
-                  <Zap className="w-3.5 h-3.5 text-[#060606]" strokeWidth={2.5} />
+          {/* Composer */}
+          <div>
+            <label className="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2 block">
+              {file ? "File" : "Message"}
+            </label>
+            <div
+              className="bg-surface border border-border rounded-2xl overflow-hidden transition-all hover:border-accent/10"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
+            >
+              {/* File preview */}
+              {file && (
+                <div className="px-4 pt-4">
+                  <div className="flex items-center gap-3 p-3 bg-background rounded-xl">
+                    <div className="w-10 h-10 rounded-lg bg-border/50 flex items-center justify-center shrink-0">
+                      <FileIcon className="w-4 h-4 text-muted" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-[11px] text-muted">{formatSize(file.size)}</p>
+                    </div>
+                    <button onClick={() => setFile(null)} className="p-1.5 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <span className="font-display text-[14px] font-bold tracking-tight">QuickDrop</span>
-              </div>
-              <p className="text-[13px] text-white/30 mb-1">
-                Built by{" "}
-                <a href="https://portfolio-frontend-sigma-jade.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition-colors font-medium">
-                  Abhishek Chauhan
-                </a>
-              </p>
-              <p className="text-[12px] text-white/15">
-                Developer &middot; Laravel, React, Vue &middot; Meerut, India
-              </p>
-            </div>
+              )}
 
-            <div className="flex items-center gap-8">
-              <div className="flex items-center gap-5">
-                <Link href="/login" className="text-[13px] text-white/25 hover:text-white/60 transition-colors">Log in</Link>
-                <Link href="/signup" className="text-[13px] text-white/25 hover:text-white/60 transition-colors">Sign up</Link>
-                <a href="https://github.com/Abh1shxkk/quickdrop" target="_blank" rel="noopener noreferrer" className="text-[13px] text-white/25 hover:text-white/60 transition-colors">GitHub</a>
+              {/* Input */}
+              <div className="px-4 pt-3">
+                {file ? (
+                  <input
+                    type="text"
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Add a caption (optional)"
+                    className="w-full bg-transparent text-sm placeholder:text-muted/40 border-0 outline-none py-1"
+                  />
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    value={text}
+                    onChange={(e) => { setText(e.target.value); handleTextarea(); }}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type or paste anything..."
+                    rows={3}
+                    className="w-full bg-transparent text-sm placeholder:text-muted/40 border-0 outline-none leading-relaxed"
+                  />
+                )}
               </div>
-              <div className="w-px h-5 bg-white/[0.06]" />
-              <div className="flex items-center gap-2">
-                {[
-                  { href: "https://github.com/Abh1shxkk", icon: <GithubIcon className="w-3.5 h-3.5" /> },
-                  { href: "https://linkedin.com/in/abhishek-chauhan-880496394", icon: <LinkedinIcon className="w-3.5 h-3.5" /> },
-                  { href: "https://x.com/abh1shxkk", icon: <XIcon className="w-3.5 h-3.5" /> },
-                  { href: "mailto:abhichauhan200504@gmail.com", icon: <Mail className="w-3.5 h-3.5" /> },
-                ].map((link) => (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    target={link.href.startsWith("mailto") ? undefined : "_blank"}
-                    rel="noopener noreferrer"
-                    className="w-8 h-8 rounded-lg bg-white/[0.03] flex items-center justify-center text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-300"
+
+              {/* Bottom bar */}
+              <div className="px-3 py-2.5 flex items-center justify-between">
+                <div>
+                  <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); e.target.value = ""; }} />
+                  <button onClick={() => fileRef.current?.click()} className="p-2 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground" title="Attach file">
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {status === "sent" && (
+                    <span className="text-[12px] text-success font-medium flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Sent
+                    </span>
+                  )}
+                  {status === "error" && (
+                    <span className="text-[12px] text-destructive font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> {error}
+                    </span>
+                  )}
+
+                  <button
+                    onClick={handleSend}
+                    disabled={!canSend}
+                    className={`h-9 px-4 rounded-xl text-sm font-medium flex items-center gap-2 transition-all ${
+                      canSend
+                        ? "bg-accent text-accent-foreground hover:opacity-90 active:scale-[0.97]"
+                        : "bg-border/50 text-muted cursor-not-allowed"
+                    }`}
                   >
-                    {link.icon}
-                  </a>
-                ))}
+                    {status === "sending" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    Send
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-12 pt-6 border-t border-white/[0.03] text-center">
-            <p className="text-[11px] text-white/10 tracking-[0.15em] uppercase">
-              &copy; 2024 QuickDrop &middot; Open Source &middot; MIT License
+            <p className="text-[11px] text-muted/40 mt-2 text-center">
+              Drop files anywhere &middot; Shift+Enter for new line &middot; Enter to send
             </p>
           </div>
         </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="py-3 text-center border-t border-border">
+        <p className="text-[11px] text-muted/30 font-medium">
+          Built by{" "}
+          <a href="https://portfolio-frontend-sigma-jade.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-muted/50 hover:text-foreground transition-colors">
+            Abhishek Chauhan
+          </a>
+          {" "}&middot;{" "}
+          <a href="https://github.com/Abh1shxkk/quickdrop" target="_blank" rel="noopener noreferrer" className="text-muted/50 hover:text-foreground transition-colors">
+            GitHub
+          </a>
+        </p>
       </footer>
     </div>
   );
