@@ -4,18 +4,34 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Zap, Send, Paperclip, X, RefreshCw, Check, Loader2, AlertCircle,
   User, UsersRound, FileText, Image as ImageIcon, Film, Music,
-  Eye, EyeOff, ChevronDown,
+  Eye, EyeOff, ChevronDown, Star, Clipboard, QrCode, FileText as TemplateIcon,
+  Upload,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { SendHistory, addToHistory } from "@/components/send-history";
+import { TemplatesModal } from "@/components/templates-modal";
+import { QrModal } from "@/components/qr-modal";
 import { useToken } from "@/lib/use-token";
 
 type Contact = { id: number; name: string; type: string };
 type Status = "idle" | "sending" | "sent" | "error";
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB Telegram limit
 const FILE_ICONS: Record<string, typeof FileText> = { image: ImageIcon, video: Film, audio: Music };
 function getFileIcon(type: string) { return FILE_ICONS[type.split("/")[0]] || FileText; }
 function formatSize(b: number) { return b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`; }
+
+// Favorites helpers
+function getFavorites(): number[] {
+  try { return JSON.parse(localStorage.getItem("qd_favs") || "[]"); } catch { return []; }
+}
+function toggleFavorite(id: number) {
+  const favs = getFavorites();
+  const next = favs.includes(id) ? favs.filter((f) => f !== id) : [...favs, id];
+  localStorage.setItem("qd_favs", JSON.stringify(next));
+  return next;
+}
 
 export default function Home() {
   const { token, saveToken, clearToken, isLoading: tokenLoading } = useToken();
@@ -28,10 +44,11 @@ export default function Home() {
 
   // Contacts
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selected, setSelected] = useState<Contact | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [manualId, setManualId] = useState("");
+  const [favorites, setFavorites] = useState<number[]>([]);
 
   // Message
   const [text, setText] = useState("");
@@ -39,6 +56,18 @@ export default function Home() {
   const [caption, setCaption] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
+  const [fileError, setFileError] = useState("");
+
+  // Modals
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+
+  // Drop zone
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
+
+  // History key to force re-render
+  const [historyKey, setHistoryKey] = useState(0);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,7 +76,7 @@ export default function Home() {
   const showSetup = !token && !tokenLoading;
 
   useEffect(() => {
-    if (token) fetchContacts();
+    if (token) { fetchContacts(); setFavorites(getFavorites()); }
   }, [token]);
 
   useEffect(() => {
@@ -57,6 +86,37 @@ export default function Home() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Full-page drag listeners
+  useEffect(() => {
+    const enter = (e: DragEvent) => { e.preventDefault(); dragCounter.current++; setDragging(true); };
+    const leave = (e: DragEvent) => { e.preventDefault(); dragCounter.current--; if (dragCounter.current === 0) setDragging(false); };
+    const over = (e: DragEvent) => e.preventDefault();
+    const drop = (e: DragEvent) => {
+      e.preventDefault(); dragCounter.current = 0; setDragging(false);
+      const f = e.dataTransfer?.files[0];
+      if (f) handleFileSelect(f);
+    };
+    document.addEventListener("dragenter", enter);
+    document.addEventListener("dragleave", leave);
+    document.addEventListener("dragover", over);
+    document.addEventListener("drop", drop);
+    return () => {
+      document.removeEventListener("dragenter", enter);
+      document.removeEventListener("dragleave", leave);
+      document.removeEventListener("dragover", over);
+      document.removeEventListener("drop", drop);
+    };
+  }, []);
+
+  const handleFileSelect = (f: File) => {
+    setFileError("");
+    if (f.size > MAX_FILE_SIZE) {
+      setFileError(`File too large (${formatSize(f.size)}). Telegram limit is 50MB.`);
+      return;
+    }
+    setFile(f);
+  };
 
   const fetchContacts = async () => {
     if (!token) return;
@@ -80,54 +140,85 @@ export default function Home() {
     try {
       const res = await fetch(`https://api.telegram.org/bot${tokenInput.trim()}/getMe`);
       const data = await res.json();
-      if (data.ok) {
-        await saveToken(tokenInput.trim());
-      } else {
-        setTokenError("Invalid token");
-      }
-    } catch {
-      setTokenError("Connection failed");
-    } finally {
-      setTokenVerifying(false);
-    }
+      if (data.ok) { await saveToken(tokenInput.trim()); }
+      else { setTokenError("Invalid token"); }
+    } catch { setTokenError("Connection failed"); }
+    finally { setTokenVerifying(false); }
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setTokenInput(text);
+    } catch { /* clipboard not available */ }
   };
 
   const disconnect = async () => {
     await clearToken();
-    setContacts([]);
-    setSelected(null);
-    setTokenInput("");
+    setContacts([]); setSelectedIds([]); setTokenInput("");
+  };
+
+  const handleToggleContact = (c: Contact) => {
+    setSelectedIds((prev) =>
+      prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+    );
+    setManualId("");
+  };
+
+  const handleToggleFav = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites(toggleFavorite(id));
   };
 
   const handleSend = async () => {
-    const target = selected || (manualId.trim() ? { id: Number(manualId.trim()), name: manualId.trim(), type: "private" } : null);
-    if (!target || !token || (!text.trim() && !file)) return;
+    const targets: Contact[] = selectedIds.length > 0
+      ? contacts.filter((c) => selectedIds.includes(c.id))
+      : manualId.trim()
+        ? [{ id: Number(manualId.trim()), name: manualId.trim(), type: "private" }]
+        : [];
+
+    if (targets.length === 0 || !token || (!text.trim() && !file)) return;
 
     setStatus("sending");
     setError("");
-    try {
-      const form = new FormData();
-      form.append("botToken", token);
-      form.append("chatId", String(target.id));
-      if (file) {
-        form.append("file", file);
-        if (caption.trim()) form.append("caption", caption.trim());
-      } else {
-        form.append("text", text.trim());
+
+    let allSuccess = true;
+    for (const target of targets) {
+      try {
+        const form = new FormData();
+        form.append("botToken", token);
+        form.append("chatId", String(target.id));
+        if (file) {
+          form.append("file", file);
+          if (caption.trim()) form.append("caption", caption.trim());
+        } else {
+          form.append("text", text.trim());
+        }
+        const res = await fetch("/api/send", { method: "POST", body: form });
+        const data = await res.json();
+        if (!data.success) { allSuccess = false; setError(data.error || "Failed"); }
+        else {
+          addToHistory({
+            type: file ? "file" : "text",
+            content: file ? file.name : text.trim(),
+            fileType: file?.type,
+            contactName: target.name,
+          });
+        }
+      } catch {
+        allSuccess = false;
+        setError("Network error");
       }
-      const res = await fetch("/api/send", { method: "POST", body: form });
-      const data = await res.json();
-      if (data.success) {
-        setStatus("sent");
-        setText(""); setFile(null); setCaption("");
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
-        setTimeout(() => setStatus("idle"), 2000);
-      } else {
-        setStatus("error"); setError(data.error || "Failed");
-        setTimeout(() => setStatus("idle"), 3000);
-      }
-    } catch {
-      setStatus("error"); setError("Network error");
+    }
+
+    if (allSuccess) {
+      setStatus("sent");
+      setText(""); setFile(null); setCaption(""); setFileError("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setHistoryKey((k) => k + 1);
+      setTimeout(() => setStatus("idle"), 2500);
+    } else {
+      setStatus("error");
       setTimeout(() => setStatus("idle"), 3000);
     }
   };
@@ -141,8 +232,18 @@ export default function Home() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const canSend = token && (selected || manualId.trim()) && (text.trim() || file) && status === "idle";
+  const hasTarget = selectedIds.length > 0 || manualId.trim();
+  const canSend = token && hasTarget && (text.trim() || file) && status === "idle";
   const FileIcon = file ? getFileIcon(file.type) : FileText;
+
+  // Sort contacts: favorites first
+  const sortedContacts = [...contacts].sort((a, b) => {
+    const aFav = favorites.includes(a.id) ? 0 : 1;
+    const bFav = favorites.includes(b.id) ? 0 : 1;
+    return aFav - bFav;
+  });
+
+  const selectedNames = contacts.filter((c) => selectedIds.includes(c.id)).map((c) => c.name);
 
   if (tokenLoading) {
     return (
@@ -169,7 +270,6 @@ export default function Home() {
             <h1 className="text-xl font-bold tracking-tight mb-1">Connect your Telegram bot</h1>
             <p className="text-sm text-muted mb-6">Follow these steps to get your bot token:</p>
 
-            {/* Steps */}
             <div className="space-y-3 mb-8">
               {[
                 { n: "1", title: "Open Telegram", desc: "Search for @BotFather and start a chat." },
@@ -189,7 +289,6 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Token input */}
             <div className="space-y-3">
               <label className="text-[12px] font-semibold text-muted uppercase tracking-wider block">Bot Token</label>
               <div className="relative">
@@ -199,11 +298,16 @@ export default function Home() {
                   onChange={(e) => setTokenInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && connectToken()}
                   placeholder="Paste your token here..."
-                  className="w-full h-12 px-4 pr-11 bg-surface border border-border rounded-xl text-sm font-mono placeholder:text-muted/40 transition-all"
+                  className="w-full h-12 px-4 pr-20 bg-surface border border-border rounded-xl text-sm font-mono placeholder:text-muted/40 transition-all"
                 />
-                <button onClick={() => setShowTokenInput(!showTokenInput)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors">
-                  {showTokenInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <button onClick={pasteFromClipboard} className="p-1.5 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-colors" title="Paste from clipboard">
+                    <Clipboard className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setShowTokenInput(!showTokenInput)} className="p-1.5 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-colors">
+                    {showTokenInput ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
               {tokenError && <p className="text-sm text-destructive font-medium">{tokenError}</p>}
               <button
@@ -214,7 +318,6 @@ export default function Home() {
                 {tokenVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
               </button>
             </div>
-
             <p className="text-[11px] text-muted/50 mt-4 leading-relaxed text-center">
               Token stays in your browser. Sign in to sync across devices.
             </p>
@@ -227,31 +330,51 @@ export default function Home() {
 
   // --- MAIN APP ---
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+      {/* Full-page drop overlay */}
+      {dragging && (
+        <div className="fixed inset-0 z-50 bg-accent/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <div className="bg-surface border-2 border-dashed border-accent rounded-2xl p-12 text-center">
+            <Upload className="w-10 h-10 text-accent mx-auto mb-3" />
+            <p className="text-lg font-bold text-foreground">Drop your file here</p>
+            <p className="text-sm text-muted mt-1">Images, documents, videos, audio</p>
+          </div>
+        </div>
+      )}
+
       <Header connected={!!token} onDisconnect={disconnect} />
 
       <main className="flex-1 flex items-start justify-center pt-10 pb-20 px-4">
         <div className="w-full max-w-lg space-y-5">
-          <div className="text-center mb-6">
+          <div className="text-center mb-4">
             <h1 className="text-xl font-bold tracking-tight mb-1">Send anything, instantly</h1>
-            <p className="text-sm text-muted">Pick a contact and drop your message or file.</p>
+            <p className="text-sm text-muted">Pick contacts and drop your message or file.</p>
+          </div>
+
+          {/* Toolbar */}
+          <div className="flex items-center justify-end gap-1.5">
+            <button onClick={() => setShowTemplates(true)} className="p-2 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-all" title="Message templates">
+              <TemplateIcon className="w-4 h-4" />
+            </button>
+            <button onClick={() => setShowQr(true)} className="p-2 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-all" title="Share QR code">
+              <QrCode className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Contact picker */}
           <div>
-            <label className="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2 block">Send to</label>
+            <label className="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2 block">
+              Send to {selectedIds.length > 1 && <span className="text-accent">({selectedIds.length} selected)</span>}
+            </label>
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowContacts(!showContacts)}
                 className="w-full h-11 px-4 bg-surface border border-border rounded-xl text-sm font-medium flex items-center justify-between hover:border-accent/30 transition-all"
               >
-                {selected ? (
-                  <span className="flex items-center gap-2 truncate">
-                    {selected.type === "group" || selected.type === "supergroup" ? <UsersRound className="w-3.5 h-3.5 text-muted shrink-0" /> : <User className="w-3.5 h-3.5 text-muted shrink-0" />}
-                    {selected.name}
-                  </span>
-                ) : <span className="text-muted/50">Select contact...</span>}
-                <ChevronDown className={`w-3.5 h-3.5 text-muted transition-transform ${showContacts ? "rotate-180" : ""}`} />
+                {selectedNames.length > 0 ? (
+                  <span className="truncate">{selectedNames.join(", ")}</span>
+                ) : <span className="text-muted/50">Select contacts...</span>}
+                <ChevronDown className={`w-3.5 h-3.5 text-muted transition-transform shrink-0 ml-2 ${showContacts ? "rotate-180" : ""}`} />
               </button>
 
               {showContacts && (
@@ -259,7 +382,7 @@ export default function Home() {
                   <div className="p-2 border-b border-border">
                     <input
                       type="text" value={manualId}
-                      onChange={(e) => { setManualId(e.target.value); setSelected(null); }}
+                      onChange={(e) => { setManualId(e.target.value); setSelectedIds([]); }}
                       placeholder="Or type a Chat ID..."
                       className="w-full h-9 px-3 bg-background border border-border rounded-lg text-sm font-mono placeholder:text-muted/40"
                     />
@@ -270,20 +393,35 @@ export default function Home() {
                       <p className="text-[11px] text-muted/50">Send <span className="font-mono bg-border/60 px-1 py-0.5 rounded text-foreground">/start</span> to your bot first</p>
                     </div>
                   ) : (
-                    <div className="max-h-[180px] overflow-y-auto">
-                      {contacts.map((c) => (
-                        <button key={c.id} onClick={() => { setSelected(c); setManualId(""); setShowContacts(false); }}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-background transition-colors ${selected?.id === c.id ? "bg-background font-medium" : ""}`}>
-                          {c.type === "group" || c.type === "supergroup" ? <UsersRound className="w-3.5 h-3.5 text-muted shrink-0" /> : <User className="w-3.5 h-3.5 text-muted shrink-0" />}
-                          <span className="truncate">{c.name}</span>
-                        </button>
-                      ))}
+                    <div className="max-h-[200px] overflow-y-auto">
+                      {sortedContacts.map((c) => {
+                        const isSel = selectedIds.includes(c.id);
+                        const isFav = favorites.includes(c.id);
+                        return (
+                          <button key={c.id} onClick={() => handleToggleContact(c)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-background transition-colors ${isSel ? "bg-accent/5 font-medium" : ""}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${isSel ? "bg-accent border-accent" : "border-border"}`}>
+                              {isSel && <Check className="w-2.5 h-2.5 text-accent-foreground" />}
+                            </div>
+                            {c.type === "group" || c.type === "supergroup" ? <UsersRound className="w-3.5 h-3.5 text-muted shrink-0" /> : <User className="w-3.5 h-3.5 text-muted shrink-0" />}
+                            <span className="truncate flex-1">{c.name}</span>
+                            <button onClick={(e) => handleToggleFav(c.id, e)} className="p-1 shrink-0" title={isFav ? "Unfavorite" : "Favorite"}>
+                              <Star className={`w-3 h-3 transition-colors ${isFav ? "fill-accent text-accent" : "text-muted/30 hover:text-muted"}`} />
+                            </button>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
-                  <div className="p-2 border-t border-border">
-                    <button onClick={fetchContacts} disabled={contactsLoading} className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-muted hover:text-foreground transition-colors">
+                  <div className="p-2 border-t border-border flex items-center justify-between">
+                    <button onClick={fetchContacts} disabled={contactsLoading} className="flex items-center gap-1.5 py-1.5 px-2 text-xs text-muted hover:text-foreground transition-colors">
                       <RefreshCw className={`w-3 h-3 ${contactsLoading ? "animate-spin" : ""}`} /> Refresh
                     </button>
+                    {selectedIds.length > 0 && (
+                      <button onClick={() => setShowContacts(false)} className="text-xs text-accent font-semibold px-2 py-1.5 hover:underline">
+                        Done
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -293,9 +431,7 @@ export default function Home() {
           {/* Composer */}
           <div>
             <label className="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2 block">{file ? "File" : "Message"}</label>
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden transition-all hover:border-accent/10"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}>
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden transition-all hover:border-accent/10">
 
               {file && (
                 <div className="px-4 pt-4">
@@ -305,10 +441,12 @@ export default function Home() {
                       <p className="text-sm font-medium truncate">{file.name}</p>
                       <p className="text-[11px] text-muted">{formatSize(file.size)}</p>
                     </div>
-                    <button onClick={() => setFile(null)} className="p-1.5 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setFile(null); setFileError(""); }} className="p-1.5 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
               )}
+
+              {fileError && <p className="px-4 pt-2 text-[12px] text-destructive font-medium">{fileError}</p>}
 
               <div className="px-4 pt-3">
                 {file ? (
@@ -321,14 +459,21 @@ export default function Home() {
               </div>
 
               <div className="px-3 py-2.5 flex items-center justify-between">
-                <div>
-                  <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); e.target.value = ""; }} />
+                <div className="flex items-center gap-1">
+                  <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }} />
                   <button onClick={() => fileRef.current?.click()} className="p-2 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground" title="Attach file">
                     <Paperclip className="w-4 h-4" />
                   </button>
+                  <button onClick={() => setShowTemplates(true)} className="p-2 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground" title="Use template">
+                    <TemplateIcon className="w-4 h-4" />
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {status === "sent" && <span className="text-[12px] text-success font-medium flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Sent</span>}
+                  {status === "sent" && (
+                    <span className="text-[12px] text-success font-medium flex items-center gap-1 animate-[scale-in_0.3s_ease-out]">
+                      <span className="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center"><Check className="w-3 h-3" /></span> Sent!
+                    </span>
+                  )}
                   {status === "error" && <span className="text-[12px] text-destructive font-medium flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {error}</span>}
                   <button onClick={handleSend} disabled={!canSend}
                     className={`h-9 px-4 rounded-xl text-sm font-medium flex items-center gap-2 transition-all ${canSend ? "bg-accent text-accent-foreground hover:opacity-90 active:scale-[0.97]" : "bg-border/50 text-muted cursor-not-allowed"}`}>
@@ -337,12 +482,20 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <p className="text-[11px] text-muted/40 mt-2 text-center">Drop files anywhere &middot; Shift+Enter for new line &middot; Enter to send</p>
+            <p className="text-[11px] text-muted/40 mt-2 text-center hidden sm:block">Drop files anywhere &middot; Shift+Enter for new line &middot; Enter to send</p>
+            <p className="text-[11px] text-muted/40 mt-2 text-center sm:hidden">Tap attach to add files</p>
           </div>
+
+          {/* Send History */}
+          <SendHistory key={historyKey} />
         </div>
       </main>
 
       <Footer />
+
+      {/* Modals */}
+      <TemplatesModal open={showTemplates} onClose={() => setShowTemplates(false)} onUse={(t) => setText(t)} />
+      <QrModal open={showQr} onClose={() => setShowQr(false)} url={typeof window !== "undefined" ? window.location.origin : ""} />
     </div>
   );
 }

@@ -9,7 +9,8 @@ const jetbrainsMono = JetBrains_Mono({ variable: "--font-jetbrains-mono", subset
 export const metadata: Metadata = {
   title: "QuickDrop — Send anything to Telegram",
   description: "Paste your bot token, pick a contact, send. No signup needed.",
-  icons: { icon: "/favicon.svg" },
+  icons: { icon: "/favicon.svg", apple: "/icon-192.svg" },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
