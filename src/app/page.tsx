@@ -157,8 +157,8 @@ export default function Home() {
     return (
       <div className="min-h-screen flex flex-col">
         <Header connected={false} onDisconnect={() => {}} />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="w-full max-w-sm">
+        <main className="flex-1 flex items-start justify-center pt-10 pb-20 px-4">
+          <div className="w-full max-w-md">
             <div className="flex items-center gap-2.5 mb-8">
               <div className="w-9 h-9 bg-accent rounded-xl flex items-center justify-center">
                 <Zap className="w-4.5 h-4.5 text-accent-foreground" strokeWidth={2.5} />
@@ -166,19 +166,39 @@ export default function Home() {
               <span className="text-lg font-bold tracking-tight">QuickDrop</span>
             </div>
 
-            <h1 className="text-xl font-bold tracking-tight mb-1">Paste your bot token</h1>
-            <p className="text-sm text-muted mb-6">
-              Create a bot via <span className="font-mono text-foreground text-xs bg-border/60 px-1.5 py-0.5 rounded">@BotFather</span> on Telegram, then paste the token.
-            </p>
+            <h1 className="text-xl font-bold tracking-tight mb-1">Connect your Telegram bot</h1>
+            <p className="text-sm text-muted mb-6">Follow these steps to get your bot token:</p>
 
+            {/* Steps */}
+            <div className="space-y-3 mb-8">
+              {[
+                { n: "1", title: "Open Telegram", desc: "Search for @BotFather and start a chat." },
+                { n: "2", title: "Create a bot", desc: "Send /newbot and follow the prompts. Pick any name." },
+                { n: "3", title: "Copy the token", desc: "BotFather will send you an API token. Copy it." },
+                { n: "4", title: "Message your bot", desc: "Find your new bot on Telegram and send /start to it." },
+              ].map((step) => (
+                <div key={step.n} className="flex gap-3 p-3 bg-surface border border-border rounded-xl">
+                  <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+                    <span className="text-xs font-bold text-accent">{step.n}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{step.title}</p>
+                    <p className="text-[12px] text-muted leading-relaxed">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Token input */}
             <div className="space-y-3">
+              <label className="text-[12px] font-semibold text-muted uppercase tracking-wider block">Bot Token</label>
               <div className="relative">
                 <input
                   type={showTokenInput ? "text" : "password"}
                   value={tokenInput}
                   onChange={(e) => setTokenInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && connectToken()}
-                  placeholder="123456:ABC-DEF..."
+                  placeholder="Paste your token here..."
                   className="w-full h-12 px-4 pr-11 bg-surface border border-border rounded-xl text-sm font-mono placeholder:text-muted/40 transition-all"
                 />
                 <button onClick={() => setShowTokenInput(!showTokenInput)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors">
@@ -194,7 +214,8 @@ export default function Home() {
                 {tokenVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
               </button>
             </div>
-            <p className="text-[11px] text-muted/50 mt-4 leading-relaxed">
+
+            <p className="text-[11px] text-muted/50 mt-4 leading-relaxed text-center">
               Token stays in your browser. Sign in to sync across devices.
             </p>
           </div>

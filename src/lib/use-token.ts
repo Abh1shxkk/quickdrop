@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "./auth";
 import { createClient } from "./supabase";
 
 export function useToken() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const prevUserId = useRef<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     const load = async () => {
-      const local = localStorage.getItem("qd_token") || "";
+      setIsLoading(true);
 
       if (user) {
+        // User is logged in — always prefer their cloud token
         const supabase = createClient();
         const { data } = await supabase
           .from("user_tokens")
@@ -22,28 +26,42 @@ export function useToken() {
           .single();
 
         if (data?.bot_token) {
+          // Cloud token exists — use it
           setToken(data.bot_token);
-          localStorage.setItem("qd_token", data.bot_token);
-        } else if (local) {
-          // Guest had a token, sync to cloud on first login
-          await supabase.from("user_tokens").upsert({
-            user_id: user.id,
-            bot_token: local,
-            updated_at: new Date().toISOString(),
-          });
-          setToken(local);
+        } else {
+          // No cloud token yet — check if guest had one to migrate
+          const local = localStorage.getItem("qd_token") || "";
+          if (local) {
+            await supabase.from("user_tokens").upsert({
+              user_id: user.id,
+              bot_token: local,
+              updated_at: new Date().toISOString(),
+            });
+            setToken(local);
+          } else {
+            setToken("");
+          }
         }
       } else {
-        setToken(local);
+        // Guest mode — use localStorage only
+        if (prevUserId.current) {
+          // Just logged out — clear local token so it doesn't bleed
+          localStorage.removeItem("qd_token");
+          setToken("");
+        } else {
+          setToken(localStorage.getItem("qd_token") || "");
+        }
       }
+
+      prevUserId.current = user?.id || null;
       setIsLoading(false);
     };
+
     load();
-  }, [user]);
+  }, [user, authLoading]);
 
   const saveToken = async (t: string) => {
     setToken(t);
-    localStorage.setItem("qd_token", t);
 
     if (user) {
       const supabase = createClient();
@@ -52,6 +70,8 @@ export function useToken() {
         bot_token: t,
         updated_at: new Date().toISOString(),
       });
+    } else {
+      localStorage.setItem("qd_token", t);
     }
   };
 

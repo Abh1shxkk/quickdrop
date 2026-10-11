@@ -9,12 +9,14 @@ type AuthCtx = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string) => Promise<string | null>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx>({
   user: null, loading: true,
-  signIn: async () => null, signUp: async () => null, signOut: async () => {},
+  signIn: async () => null, signUp: async () => null,
+  signInWithGoogle: async () => {}, signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -45,11 +47,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return error?.message || null;
   };
 
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
-  return <Ctx.Provider value={{ user, loading, signIn, signUp, signOut }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, signOut }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useAuth() { return useContext(Ctx); }
