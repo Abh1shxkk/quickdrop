@@ -4,6 +4,18 @@ Send text, files, and links from your browser to Telegram — in one click.
 
 **Live:** [quickdrop-rosy.vercel.app](https://quickdrop-rosy.vercel.app)
 
+## Screenshots
+
+### Setup Screen
+| Light | Dark |
+|:---:|:---:|
+| ![Setup Light](public/screenshots/setup-light.png) | ![Setup Dark](public/screenshots/setup-dark.png) |
+
+### Dashboard
+| Light | Dark |
+|:---:|:---:|
+| ![App Light](public/screenshots/app-light.png) | ![App Dark](public/screenshots/app-dark.png) |
+
 ## What it does
 
 QuickDrop is a web app that lets you send anything to Telegram directly from your browser. No app downloads, no phone needed — just paste your bot token and start sending.
