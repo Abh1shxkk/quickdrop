@@ -93,12 +93,12 @@ export function Header() {
                   <button
                     onClick={() => {
                       setShowMenu(false);
-                      router.push("/setup");
+                      router.push("/settings");
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:text-foreground hover:bg-background transition-colors"
                   >
                     <Settings className="w-3.5 h-3.5" />
-                    Bot settings
+                    Settings
                   </button>
                   <button
                     onClick={handleLogout}
