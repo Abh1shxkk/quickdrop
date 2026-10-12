@@ -40,7 +40,7 @@ export function Composer({ canSend, status, error, text, file, caption, onTextCh
 
   const handleTextarea = useCallback(() => {
     const el = textareaRef.current;
-    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; }
+    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 360) + "px"; }
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -52,11 +52,11 @@ export function Composer({ canSend, status, error, text, file, caption, onTextCh
   return (
     <div>
       <label className="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2 block">{file ? "File" : "Message"}</label>
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden transition-all hover:border-accent/10">
+      <div className="field bg-background/60 border border-border rounded-2xl overflow-hidden transition-all hover:border-accent/30">
 
         {file && (
           <div className="px-4 pt-4">
-            <div className="flex items-center gap-3 p-3 bg-background rounded-xl">
+            <div className="flex items-center gap-3 p-3 bg-surface border border-border rounded-xl">
               <div className="w-10 h-10 rounded-lg bg-border/50 flex items-center justify-center shrink-0">
                 <FileIcon className="w-4 h-4 text-muted" />
               </div>
@@ -79,11 +79,11 @@ export function Composer({ canSend, status, error, text, file, caption, onTextCh
               placeholder="Add a caption (optional)" className="w-full bg-transparent text-sm placeholder:text-muted/40 border-0 outline-none py-1" aria-label="File caption" />
           ) : (
             <textarea ref={textareaRef} value={text} onChange={(e) => { onTextChange(e.target.value); handleTextarea(); }} onKeyDown={handleKeyDown}
-              placeholder="Type or paste anything..." rows={3} className="w-full bg-transparent text-sm placeholder:text-muted/40 border-0 outline-none leading-relaxed" aria-label="Message" />
+              placeholder="Type or paste anything..." rows={7} className="w-full bg-transparent text-sm placeholder:text-muted/40 border-0 outline-none leading-relaxed" aria-label="Message" />
           )}
         </div>
 
-        <div className="px-3 py-2.5 flex items-center justify-between">
+        <div className="px-3 py-2.5 flex items-center justify-between border-t border-border/70">
           <div className="flex items-center gap-1">
             <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }} />
             <button onClick={() => fileRef.current?.click()} className="p-2 rounded-lg hover:bg-border/50 transition-colors text-muted hover:text-foreground" title="Attach file" aria-label="Attach file">
@@ -101,14 +101,13 @@ export function Composer({ canSend, status, error, text, file, caption, onTextCh
             )}
             {status === "error" && <span className="text-[12px] text-destructive font-medium flex items-center gap-1" role="alert"><AlertCircle className="w-3.5 h-3.5" /> {error}</span>}
             <button onClick={onSend} disabled={!canSend} aria-label="Send message"
-              className={`h-9 px-4 rounded-xl text-sm font-medium flex items-center gap-2 transition-all ${canSend ? "bg-accent text-accent-foreground hover:opacity-90 active:scale-[0.97]" : "bg-border/50 text-muted cursor-not-allowed"}`}>
+              className={`h-10 px-5 rounded-xl text-sm font-medium flex items-center gap-2 transition-all ${canSend ? "bg-accent text-accent-foreground hover:opacity-90 active:scale-[0.97]" : "bg-border/50 text-muted cursor-not-allowed"}`}>
               {status === "sending" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send
             </button>
           </div>
         </div>
       </div>
-      <p className="text-[11px] text-muted/40 mt-2 text-center hidden sm:block">Drop files anywhere &middot; Shift+Enter for new line &middot; Enter to send</p>
-      <p className="text-[11px] text-muted/40 mt-2 text-center sm:hidden">Tap attach to add files</p>
+      <p className="text-[11px] text-muted/60 mt-2 text-center sm:hidden">Tap attach to add files</p>
     </div>
   );
 }

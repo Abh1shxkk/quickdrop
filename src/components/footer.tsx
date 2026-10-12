@@ -21,8 +21,8 @@ const links = [
 
 export function Footer() {
   return (
-    <footer className="py-5 px-6 border-t border-border">
-      <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+    <footer className="py-6 px-4 sm:px-6 lg:px-8 border-t border-border bg-surface/40 backdrop-blur-sm">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-[12px] text-muted">
           Built by{" "}
           <a href="https://portfolio-frontend-sigma-jade.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-foreground font-semibold hover:text-accent transition-colors">

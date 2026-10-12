@@ -59,7 +59,7 @@ export function ContactPicker({ contacts, selectedIds, manualId, loading, onTogg
       <div className="relative" ref={ref}>
         <button
           onClick={() => setOpen(!open)}
-          className="w-full h-11 px-4 bg-surface border border-border rounded-xl text-sm font-medium flex items-center justify-between hover:border-accent/30 transition-all"
+          className="w-full h-12 px-4 bg-background/60 border border-border rounded-xl text-sm font-medium flex items-center justify-between hover:border-accent/30 transition-all"
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label="Select contacts"

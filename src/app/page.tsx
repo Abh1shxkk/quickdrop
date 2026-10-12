@@ -10,6 +10,7 @@ import { Composer, MAX_FILE_SIZE, formatFileSize } from "@/components/composer";
 import { SendHistory, addToHistory } from "@/components/send-history";
 import { TemplatesModal } from "@/components/templates-modal";
 import { QrModal } from "@/components/qr-modal";
+import { ShortcutsCard } from "@/components/shortcuts-card";
 import { useToken } from "@/lib/use-token";
 
 type Status = "idle" | "sending" | "sent" | "error";
@@ -156,48 +157,58 @@ export default function Home() {
 
       <Header connected onDisconnect={disconnect} />
 
-      <main className="flex-1 flex items-start justify-center pt-10 pb-20 px-4">
-        <div className="w-full max-w-lg space-y-5">
-          <div className="text-center mb-4">
-            <h1 className="text-xl font-bold tracking-tight mb-1">Send anything, instantly</h1>
-            <p className="text-sm text-muted">Pick contacts and drop your message or file.</p>
+      <main className="flex-1 w-full max-w-[84rem] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8">
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-wider text-accent mb-2">Dashboard</p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              Send anything, <span className="font-serif italic font-normal text-accent">instantly.</span>
+            </h1>
+            <p className="text-sm text-muted mt-2">Pick contacts and drop your message or file.</p>
           </div>
 
           {/* Toolbar */}
-          <div className="flex items-center justify-end gap-1.5">
-            <button onClick={() => setShowTemplates(true)} className="p-2 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-all" title="Message templates" aria-label="Message templates">
-              <FileText className="w-4 h-4" />
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowTemplates(true)} className="h-10 px-4 rounded-xl border border-border bg-surface/70 backdrop-blur text-sm font-medium text-muted hover:text-foreground hover:border-accent/30 flex items-center gap-2 transition-all" aria-label="Message templates">
+              <FileText className="w-4 h-4" /> Templates
             </button>
-            <button onClick={() => setShowQr(true)} className="p-2 rounded-lg hover:bg-border/50 text-muted hover:text-foreground transition-all" title="Share QR code" aria-label="Share QR code">
-              <QrCode className="w-4 h-4" />
+            <button onClick={() => setShowQr(true)} className="h-10 px-4 rounded-xl border border-border bg-surface/70 backdrop-blur text-sm font-medium text-muted hover:text-foreground hover:border-accent/30 flex items-center gap-2 transition-all" aria-label="Share QR code">
+              <QrCode className="w-4 h-4" /> Open on phone
             </button>
           </div>
+        </div>
 
-          <ContactPicker
-            contacts={contacts}
-            selectedIds={selectedIds}
-            manualId={manualId}
-            loading={contactsLoading}
-            onToggle={handleToggleContact}
-            onManualIdChange={(id) => { setManualId(id); setSelectedIds([]); }}
-            onRefresh={fetchContacts}
-          />
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
+          <div className="card p-5 sm:p-7 space-y-6">
+            <ContactPicker
+              contacts={contacts}
+              selectedIds={selectedIds}
+              manualId={manualId}
+              loading={contactsLoading}
+              onToggle={handleToggleContact}
+              onManualIdChange={(id) => { setManualId(id); setSelectedIds([]); }}
+              onRefresh={fetchContacts}
+            />
 
-          <Composer
-            canSend={canSend}
-            status={status}
-            error={error}
-            text={text}
-            file={file}
-            caption={caption}
-            onTextChange={setText}
-            onFileChange={setFile}
-            onCaptionChange={setCaption}
-            onSend={handleSend}
-            onOpenTemplates={() => setShowTemplates(true)}
-          />
+            <Composer
+              canSend={canSend}
+              status={status}
+              error={error}
+              text={text}
+              file={file}
+              caption={caption}
+              onTextChange={setText}
+              onFileChange={setFile}
+              onCaptionChange={setCaption}
+              onSend={handleSend}
+              onOpenTemplates={() => setShowTemplates(true)}
+            />
+          </div>
 
-          <SendHistory key={historyKey} />
+          <aside className="space-y-6">
+            <SendHistory key={historyKey} />
+            <ShortcutsCard />
+          </aside>
         </div>
       </main>
 

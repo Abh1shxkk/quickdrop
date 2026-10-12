@@ -27,9 +27,9 @@ export function Header({ connected, onDisconnect }: Props) {
 
   return (
     <>
-      <div className="sticky top-0 z-40 px-4 pt-3">
-      <header className="border border-border bg-surface/80 backdrop-blur-md rounded-2xl max-w-2xl mx-auto shadow-sm">
-        <div className="px-5 h-13 flex items-center justify-between">
+      <div className="sticky top-0 z-40 px-4 sm:px-6 lg:px-8 pt-3">
+      <header className="border border-border bg-surface/80 backdrop-blur-md rounded-2xl max-w-7xl mx-auto shadow-sm">
+        <div className="px-4 sm:px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
               <Zap className="w-4 h-4 text-accent-foreground" strokeWidth={2.5} />
@@ -37,12 +37,12 @@ export function Header({ connected, onDisconnect }: Props) {
             <span className="text-[15px] font-bold tracking-tight">QuickDrop</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* Status */}
             {connected && (
               <div className="flex items-center gap-1.5 mr-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-success" />
-                <span className="text-[11px] text-muted font-medium">Connected</span>
+                <span className="text-[11px] text-muted font-medium hidden sm:inline">Connected</span>
               </div>
             )}
 
@@ -84,7 +84,7 @@ export function Header({ connected, onDisconnect }: Props) {
             ) : (
               <button
                 onClick={() => setShowAuth(true)}
-                className="text-[12px] text-muted hover:text-foreground font-medium px-3 py-1.5 rounded-lg hover:bg-border/50 transition-all"
+                className="text-[12px] text-muted hover:text-foreground font-medium whitespace-nowrap px-3 py-1.5 rounded-lg hover:bg-border/50 transition-all"
               >
                 Sign in
               </button>
